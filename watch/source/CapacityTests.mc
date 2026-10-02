@@ -13,9 +13,6 @@ using Toybox.Application.Storage;
     for(var t=0;t<12;t++) { d.update(1767225600+t,[40.0+t*0.00001,-105.0+t*0.00001],100.0+t,3.0,70,0); }
     var before=System.getSystemStats();
     logger.debug("Full buffer used="+before.usedMemory.toString()+" free="+before.freeMemory.toString()+" total="+before.totalMemory.toString());
-    // The unit-test simulator has a larger heap than a physical watch.
-    // Check the observed allocation rather than treating its free heap as
-    // proof of hardware compatibility.
     Test.assert(before.usedMemory<100000);
     Storage.setValue("capacity-test",{"queue"=>rows,"route"=>route});
     var saved=Storage.getValue("capacity-test");
@@ -34,15 +31,28 @@ using Toybox.Application.Storage;
 (:test) function testMissingValueSerialization(logger) {
     var missing=-2147483648;
     logger.debug("SDK minimum integer toString="+missing.toString());
-    Test.assert(lfWireInteger(missing)=="-2147483648");
-    Test.assert(lfWireInteger(0)=="0");
-    Test.assert(lfWireInteger(-1)=="-1");
-    Test.assert(lfWireInteger(-1050000000)=="-1050000000");
-    Test.assert(lfWireInteger(-1800000000)=="-1800000000");
-    Test.assert(lfWireInteger(1800000000)=="1800000000");
-    Test.assert(lfWireInteger(1767225600)=="1767225600");
+    Test.assert(lfWireInteger(missing).equals("-2147483648"));
+    Test.assert(lfWireInteger(0).equals("0"));
+    Test.assert(lfWireInteger(-1).equals("-1"));
+    Test.assert(lfWireInteger(-1050000000).equals("-1050000000"));
+    Test.assert(lfWireInteger(-1800000000).equals("-1800000000"));
+    Test.assert(lfWireInteger(1800000000).equals("1800000000"));
+    Test.assert(lfWireInteger(1767225600).equals("1767225600"));
     var position=(40.0*10000000.0).toNumber();
     Test.assert(position==400000000);
-    Test.assert(lfWireInteger(position)=="400000000");
+    Test.assert(lfWireInteger(position).equals("400000000"));
+    return true;
+}
+(:test) function testPhoneMessageIdMatching(logger) {
+    var ready="READY".toLower();
+    Test.assert(lfTextEquals("ready",ready));
+    var first=(1767225600).toString();
+    var second=(1767225600).toString();
+    Test.assert(lfTextEquals(first,second));
+    Test.assert(!lfTextEquals(first,"1767225601"));
+    Test.assert(!lfTextEquals("ready",null));
+    Test.assert(!lfTextEquals(null,"ready"));
+    Test.assert(!lfTextEquals(42,"42"));
+    Test.assert(!lfTextEquals("42",42));
     return true;
 }
