@@ -120,7 +120,7 @@ class LiftFreeApp extends Application.AppBase {
             var rows="";
             for(var i=0;i<n;i++) {
                 var r=queue[i];
-                for(var k=0;k<r.size();k++) { if(k>0) { rows+=","; } rows+=r[k].toString(); }
+                for(var k=0;k<r.size();k++) { if(k>0) { rows+=","; } rows+=lfWireInteger(r[k]); }
                 rows+="\n";
             }
             lastSentEnd=base+n;
@@ -165,12 +165,16 @@ class LiftFreeApp extends Application.AppBase {
             m.addItem(new WatchUi.MenuItem("Finish and send","Garmin backup also saved",:finish,null));
             m.addItem(new WatchUi.MenuItem("Force riding",null,:ride,null));
         }
-        if(phase==3) { m.addItem(new WatchUi.MenuItem("Keep transferring",null,:keep,null)); }
+        if(phase==3) {
+            m.addItem(new WatchUi.MenuItem("Keep transferring",null,:keep,null));
+            m.addItem(new WatchUi.MenuItem("Close; transfer later","Reopen to resume",:later,null));
+        }
         if(phase==0) { m.addItem(new WatchUi.MenuItem(detector.autoOn?"Auto lift ON":"Auto lift OFF","Learned route only",:auto,null)); }
         WatchUi.pushView(m,new LFMenu(self),WatchUi.SLIDE_UP);
     }
     function finish() {
         if(phase!=1) { return; }
+        if(now()-startAt<2) { hint="Record at least 2 seconds"; return; }
         sample(); endAt=now();
         if(session!=null) {
             if(session.isRecording() && !session.stop()) { hint="Stop failed - try again"; return; }
@@ -238,5 +242,6 @@ class LFMenu extends WatchUi.Menu2InputDelegate {
         if(id==:finish) { app.finish(); }
         else if(id==:ride) { app.forceRide(); }
         else if(id==:auto) { app.detector.toggleAuto(); }
+        else if(id==:later) { System.exit(); }
     }
 }
