@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Reproducible project preparation and CI builds. Never downloads user ride data."""
+"""Prepare and build LiftFree. No user GPS data, credentials or private keys in artifacts."""
 from pathlib import Path
-import os, sys, shutil, subprocess, struct, zlib, zipfile, urllib.request, json
+import os, sys, shutil, subprocess, struct, zlib, zipfile, urllib.request, json, hashlib
 ROOT=Path(__file__).resolve().parents[1]
 DIST=ROOT/'dist'; DIST.mkdir(exist_ok=True)
 WORK=ROOT/'.build'; WORK.mkdir(exist_ok=True)
@@ -30,10 +30,9 @@ def prepare():
 '''
     write('watch/manifest.xml',manifest)
     write('watch/monkey.jungle','project.manifest = manifest.xml\nbase.sourcePath = source\nbase.resourcePath = resources\nfenix6pro.resourcePath = $(base.resourcePath);resources-pro\n')
-    write('watch/resources/strings/strings.xml','<strings><string id="AppName">LiftFree MTB</string><string id="Product">3288</string></strings>')
-    write('watch/resources-pro/strings/strings.xml','<strings><string id="Product">3289</string></strings>')
+    write('watch/resources/strings/strings.xml','<strings><string id="AppName">LiftFree MTB</string><string id="Product">3289</string></strings>')
+    write('watch/resources-pro/strings/strings.xml','<strings><string id="Product">3290</string></strings>')
     write('watch/resources/drawables/drawables.xml','<drawables><bitmap id="LauncherIcon" filename="launcher.png"/></drawables>')
-    # Tiny mountain glyph, no embedded fonts or third-party artwork.
     w=h=40; raw=bytearray()
     for y in range(h):
         raw.append(0)
@@ -48,7 +47,7 @@ def prepare():
         write('android/settings.gradle',"pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }\ndependencyResolutionManagement { repositories { google(); mavenCentral() } }\nrootProject.name='LiftFree'\ninclude ':app'\n")
         write('android/build.gradle',"plugins { id 'com.android.application' version '8.9.2' apply false }\n")
         write('android/gradle.properties','org.gradle.jvmargs=-Xmx2048m\nandroid.useAndroidX=true\n')
-        write('android/app/build.gradle',"plugins { id 'com.android.application' }\nandroid { namespace 'org.liftfree.mtb'; compileSdk 35\n defaultConfig { applicationId 'org.liftfree.mtb'; minSdk 26; targetSdk 35; versionCode 3; versionName '0.3.0-test' }\n compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }\n sourceSets { main { java.srcDirs=['../src']; manifest.srcFile='../AndroidManifest.xml' } }\n}\ndependencies { implementation 'com.garmin.connectiq:ciq-companion-app-sdk:2.4.0@aar' }\n")
+        write('android/app/build.gradle',"plugins { id 'com.android.application' }\nandroid { namespace 'org.liftfree.mtb'; compileSdk 35\n defaultConfig { applicationId 'org.liftfree.mtb'; minSdk 30; targetSdk 35; versionCode 3; versionName '0.3.0-test' }\n compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }\n sourceSets { main { java.srcDirs=['../src']; manifest.srcFile='../AndroidManifest.xml' } }\n}\ndependencies { implementation 'com.garmin.connectiq:ciq-companion-app-sdk:2.4.0@aar' }\n")
 
 prepare()
 if '--prepare' in sys.argv:sys.exit(0)
@@ -78,6 +77,8 @@ if (ROOT/'android/src/org/liftfree/mtb/Core.java').exists():
         out=WORK/'classes';out.mkdir(exist_ok=True)
         run(['javac','-d',out,ROOT/'android/src/org/liftfree/mtb/Core.java',ROOT/'tests/CoreTest.java'],'core-tests.log')
         run(['java','-cp',out,'org.liftfree.mtb.CoreTest',str(DIST/'SYNTHETIC_TEST_DO_NOT_UPLOAD.fit')],'core-tests.log')
+        run([sys.executable,'-m','pip','install','--disable-pip-version-check','garmin-fit-sdk'],'fit-sdk-test.log',180)
+        run([sys.executable,ROOT/'tests/validate_fit.py',DIST/'SYNTHETIC_TEST_DO_NOT_UPLOAD.fit'],'fit-sdk-test.log')
         sdk=Path(os.environ.get('ANDROID_HOME','/usr/local/lib/android/sdk'))
         manager=shutil.which('sdkmanager') or str(sdk/'cmdline-tools/latest/bin/sdkmanager')
         run([manager,'platforms;android-35','build-tools;35.0.0'],'android-build.log',300)
@@ -90,6 +91,15 @@ if (ROOT/'android/src/org/liftfree/mtb/Core.java').exists():
         signer=sdk/'build-tools/35.0.0/apksigner'
         run([signer,'verify','--verbose',DIST/'LiftFree-Android.apk'],'android-verification.log')
     except Exception as e:errors.append('Android: '+str(e))
+if (ROOT/'README.md').exists():shutil.copy2(ROOT/'README.md',DIST/'README.md')
+with zipfile.ZipFile(DIST/'LiftFree-source.zip','w',zipfile.ZIP_DEFLATED) as z:
+    for folder in ('watch/source','watch/resources','watch/resources-pro','android/src','tests','ci'):
+        for p in (ROOT/folder).rglob('*'):
+            if p.is_file() and p.suffix in ('.mc','.java','.xml','.png','.py'):z.write(p,p.relative_to(ROOT))
+    for file in ('watch/manifest.xml','watch/monkey.jungle','android/AndroidManifest.xml','android/build.gradle','android/settings.gradle','android/gradle.properties','android/app/build.gradle','README.md'):
+        p=ROOT/file
+        if p.is_file():z.write(p,file)
 summary={'commit':os.environ.get('GITHUB_SHA'),'errors':errors,'hardware_tested':False,'strava_upload_tested':False,'outputs':[p.name for p in DIST.iterdir() if p.suffix in ('.prg','.apk')]}
 (DIST/'BUILD-STATUS.json').write_text(json.dumps(summary,indent=2))
+(DIST/'SHA256SUMS.txt').write_text(''.join(hashlib.sha256(p.read_bytes()).hexdigest()+'  '+p.name+'\n' for p in sorted(DIST.iterdir()) if p.is_file() and p.name!='SHA256SUMS.txt'))
 if errors:print('\n'.join(errors));sys.exit(1)
