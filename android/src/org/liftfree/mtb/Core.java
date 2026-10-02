@@ -59,7 +59,8 @@ public final class Core {
     }
     public static Result encode(List<Row> rows,int product,long start,long end,long timerMs) throws IOException {
         if(rows.size()<2 || rows.size()>200000)throw new IllegalArgumentException("Incomplete or oversized recording");
-        if(product!=3288 && product!=3289)throw new IllegalArgumentException("Unsupported watch identity");
+        // Garmin FIT SDK: FENIX6_SPORT (standard) = 3289; FENIX6 (Pro) = 3290.
+        if(product!=3289 && product!=3290)throw new IllegalArgumentException("Unsupported watch identity");
         if(start>rows.get(0).v[0] || end<rows.get(rows.size()-1).v[0] || end<=start || end-start>172800)throw new IllegalArgumentException("Invalid recording duration");
         long last=0;int gps=0;
         for(Row r:rows){if(r.v[0]<=last)throw new IllegalArgumentException("Non-increasing sample time");last=r.v[0];if(r.v[1]!=MISSING)gps++;}
