@@ -20,11 +20,11 @@ class LiftFreeApp extends Application.AppBase {
     var phase=0; var state=0; var since=0; var sid="";
     var position=null; var positionAt=0; var altitude=null;
     var queue=[]; var base=0; var serial=0; var lastSentEnd=0;
-    var busy=false; var lastSend=0; var phoneAt=0;
+    var busy=false; var lastSend=0; var phoneAt=0; var lastSampleAt=0;
     var startAt=0; var endAt=0; var timerMs=0; var metres=0.0;
     var overflow=false; var nativeSaved=false; var saveError=false;
     var stateField=null; var sinceField=null;
-    var hint="Open phone companion"; var product=3288;
+    var hint="Open phone companion"; var product=3289;
     function initialize() { AppBase.initialize(); }
     function onStart(options) {
         product=WatchUi.loadResource(Rez.Strings.Product).toNumber();
@@ -63,7 +63,7 @@ class LiftFreeApp extends Application.AppBase {
             sinceField=session.createField("LiftFreeSince",1,FitContributor.DATA_TYPE_UINT32,{:mesgType=>FitContributor.MESG_TYPE_RECORD,:units=>"unix_s"});
             startAt=now(); since=startAt; sid=startAt.toString(); state=0;
             queue=[]; base=0; serial=0; overflow=false; nativeSaved=false;
-            endAt=0; lastSentEnd=0; saveError=false;
+            endAt=0; lastSentEnd=0; lastSampleAt=0; saveError=false;
             stateField.setData(0); sinceField.setData(since);
             if(!session.start()) { hint="Recorder did not start"; session=null; return; }
             phase=1; hint="BACK: mark lift"; sample(); buzz();
@@ -79,7 +79,8 @@ class LiftFreeApp extends Application.AppBase {
     function sample() {
         if(overflow || session==null) { return; }
         var t=now();
-        if(queue.size()>0 && queue[queue.size()-1][0]==t) { return; }
+        // Do not rely on queue contents: it may have just been acknowledged.
+        if(t<=lastSampleAt) { return; }
         var a=Activity.getActivityInfo(); altitude=a.altitude;
         if(a.elapsedDistance!=null) { metres=a.elapsedDistance; }
         if(a.timerTime!=null) { timerMs=a.timerTime.toNumber(); }
@@ -91,7 +92,7 @@ class LiftFreeApp extends Application.AppBase {
         // UNIX seconds, deg*1e7, altitude decimetres, bpm, rpm, mm/s,
         // native distance cm, lift state, effective state transition UNIX time.
         var row=[t,p==null?-2147483648:number(p[0],10000000.0,-2147483648),p==null?-2147483648:number(p[1],10000000.0,-2147483648),number(altitude,10.0,-2147483648),number(a.currentHeartRate,1,255),number(a.currentCadence,1,255),number(a.currentSpeed,1000.0,-1),number(a.elapsedDistance,100.0,-1),state,since];
-        queue.add(row); serial++;
+        queue.add(row); serial++; lastSampleAt=t;
         if(serial%10==0) { snapshot(); }
     }
     function snapshot() {
