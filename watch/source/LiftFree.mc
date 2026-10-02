@@ -132,8 +132,8 @@ class LiftFreeApp extends Application.AppBase {
     function onPhone(message) {
         var d=message.data;
         if(!(d instanceof Dictionary) || d["v"]!=3) { return; }
-        if(d["id"]=="ready") { phoneAt=now(); return; }
-        if(d["id"]!=sid) { return; }
+        if(lfTextEquals("ready",d["id"])) { phoneAt=now(); return; }
+        if(!lfTextEquals(sid,d["id"])) { return; }
         phoneAt=now();
         var next=d["next"];
         if(next!=null && next>=base && next<=lastSentEnd && next<=serial) {
