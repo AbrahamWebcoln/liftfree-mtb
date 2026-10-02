@@ -1,0 +1,35 @@
+name: Build LiftFree
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'ci/BUILD_READY'
+permissions:
+  contents: read
+concurrency:
+  group: liftfree-build
+  cancel-in-progress: true
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Build and test
+        run: python3 ci/build.py
+      - name: Retain build outputs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: LiftFree-build-output
+          path: dist/
+          if-no-files-found: warn
+          retention-days: 14
