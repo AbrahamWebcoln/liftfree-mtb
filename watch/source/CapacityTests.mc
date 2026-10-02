@@ -13,7 +13,10 @@ using Toybox.Application.Storage;
     for(var t=0;t<12;t++) { d.update(1767225600+t,[40.0+t*0.00001,-105.0+t*0.00001],100.0+t,3.0,70,0); }
     var before=System.getSystemStats();
     logger.debug("Full buffer used="+before.usedMemory.toString()+" free="+before.freeMemory.toString()+" total="+before.totalMemory.toString());
-    Test.assert(before.freeMemory>16384);
+    // The unit-test simulator has a larger heap than a physical watch.
+    // Check the observed allocation rather than treating its free heap as
+    // proof of hardware compatibility.
+    Test.assert(before.usedMemory<100000);
     Storage.setValue("capacity-test",{"queue"=>rows,"route"=>route});
     var saved=Storage.getValue("capacity-test");
     Test.assert(saved["queue"].size()==180);
@@ -21,7 +24,7 @@ using Toybox.Application.Storage;
     Storage.deleteValue("capacity-test");
     var packet="";
     for(var r=0;r<12;r++) {
-        for(var k=0;k<10;k++) { if(k>0) { packet+=","; } packet+=rows[r][k].toString(); }
+        for(var k=0;k<10;k++) { if(k>0) { packet+=","; } packet+=lfWireInteger(rows[r][k]); }
         packet+="\n";
     }
     Test.assert(packet.length()<1600);
@@ -30,8 +33,16 @@ using Toybox.Application.Storage;
 }
 (:test) function testMissingValueSerialization(logger) {
     var missing=-2147483648;
-    Test.assert(missing.toString()=="-2147483648");
+    logger.debug("SDK minimum integer toString="+missing.toString());
+    Test.assert(lfWireInteger(missing)=="-2147483648");
+    Test.assert(lfWireInteger(0)=="0");
+    Test.assert(lfWireInteger(-1)=="-1");
+    Test.assert(lfWireInteger(-1050000000)=="-1050000000");
+    Test.assert(lfWireInteger(-1800000000)=="-1800000000");
+    Test.assert(lfWireInteger(1800000000)=="1800000000");
+    Test.assert(lfWireInteger(1767225600)=="1767225600");
     var position=(40.0*10000000.0).toNumber();
     Test.assert(position==400000000);
+    Test.assert(lfWireInteger(position)=="400000000");
     return true;
 }
