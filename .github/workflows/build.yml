@@ -1,14 +1,25 @@
 name: Build LiftFree
 on:
   workflow_dispatch:
+  pull_request:
+    paths:
+      - 'android/**'
+      - 'watch/**'
+      - 'tests/**'
+      - 'ci/**'
+      - '.github/workflows/build.yml'
   push:
     branches: [main]
     paths:
-      - 'ci/BUILD_READY'
+      - 'android/**'
+      - 'watch/**'
+      - 'tests/**'
+      - 'ci/**'
+      - '.github/workflows/build.yml'
 permissions:
   contents: read
 concurrency:
-  group: liftfree-build
+  group: liftfree-build-${{ github.ref }}
   cancel-in-progress: true
 jobs:
   build:

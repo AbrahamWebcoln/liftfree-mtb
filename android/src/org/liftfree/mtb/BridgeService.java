@@ -73,7 +73,7 @@ public final class BridgeService extends Service {
                 if(count!=ride.rows.size()){reply(device,id,ride.rows.size(),false);return;}
                 ride.finish(count,number(m,"end"),number(m,"timer"),(int)number(m,"model"),number(m,"start"));
                 reply(device,id,count,true);setStatus("Ride saved: "+ride.status().getLong("expected_ascent")+" m riding ascent");
-                if(autoEnabled())queueUpload(ride,false);
+                if(autoEnabled())queueUpload(ride);
             }
         }catch(Exception e){setStatus("Transfer not acknowledged: "+e.getMessage());}
     }
@@ -82,15 +82,15 @@ public final class BridgeService extends Service {
         main.post(()->{try{iq.sendMessage(d,app,message,(device,application,result)->{});}catch(Exception e){setStatus("Phone saved data; acknowledgement will retry");}});
     }
     boolean autoEnabled(){SharedPreferences p=getSharedPreferences("settings",MODE_PRIVATE);return p.getBoolean("auto_upload",false)&&p.getBoolean("backup_sync_ack",false)&&new StravaApi(this).authorized();}
-    void queueUpload(RideStore ride,boolean explicit){
+    void queueUpload(RideStore ride){
         if(!uploading.add(ride.id))return;
-        net.execute(()->{try{setStatus("Uploading corrected ride");new StravaApi(this).upload(ride,explicit);JSONObject s=ride.status();setStatus("Strava: "+s.optString("status"));}catch(Exception e){setStatus("Strava: "+e.getMessage());try{JSONObject s=ride.status();s.put("error",e.getMessage());ride.status(s);}catch(Exception ignored){}}finally{uploading.remove(ride.id);}});
+        net.execute(()->{try{setStatus("Uploading corrected ride");new StravaApi(this).upload(ride);JSONObject s=ride.status();setStatus("Strava: "+s.optString("status"));}catch(Exception e){setStatus("Strava: "+e.getMessage());try{JSONObject s=ride.status();s.put("error",e.getMessage());ride.status(s);}catch(Exception ignored){}}finally{uploading.remove(ride.id);}});
     }
-    void upload(String id){disk.execute(()->{try{queueUpload(new RideStore(root,id),true);}catch(Exception e){setStatus(e.getMessage());}});}
+    void upload(String id){disk.execute(()->{try{queueUpload(new RideStore(root,id));}catch(Exception e){setStatus(e.getMessage());}});}
     final Runnable autoTick=new Runnable(){public void run(){
         if(autoEnabled())disk.execute(()->{File[] dirs=root.listFiles();if(dirs!=null)for(File d:dirs)try{
             File ready=new File(d,"ready.json");if(!ready.isFile())continue;String s=RideStore.readJson(ready).optString("status");
-            if(s.equals("ready")||s.equals("processing")||s.equals("uploaded"))queueUpload(new RideStore(root,d.getName()),false);
+            if(s.equals("ready")||s.equals("processing")||s.equals("uploaded"))queueUpload(new RideStore(root,d.getName()));
         }catch(Exception e){setStatus("Pending ride needs attention");}});
         main.postDelayed(this,60000);
     }};
