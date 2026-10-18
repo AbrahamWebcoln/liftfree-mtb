@@ -52,6 +52,11 @@ def prepare():
 prepare()
 if '--prepare' in sys.argv:sys.exit(0)
 errors=[]
+mock_passed=False
+try:
+    run([sys.executable,ROOT/'ci/strava_tests.py'],'strava-mock-tests.log',300)
+    mock_passed=True
+except Exception as e:errors.append('Strava mock tests: '+str(e))
 try:
     run(['docker','pull',IMAGE],'watch-build.log',900)
     run(['docker','image','inspect','--format','{{index .RepoDigests 0}}',IMAGE],'watch-build.log')
@@ -97,11 +102,11 @@ if (ROOT/'README.md').exists():shutil.copy2(ROOT/'README.md',DIST/'README.md')
 with zipfile.ZipFile(DIST/'LiftFree-source.zip','w',zipfile.ZIP_DEFLATED) as z:
     for folder in ('watch/source','watch/resources','watch/resources-pro','android/src','tests','ci'):
         for p in (ROOT/folder).rglob('*'):
-            if p.is_file() and p.suffix in ('.mc','.java','.xml','.png','.py'):z.write(p,p.relative_to(ROOT))
+            if p.is_file() and p.suffix in ('.mc','.java','.xml','.png','.py','.md'):z.write(p,p.relative_to(ROOT))
     for file in ('watch/manifest.xml','watch/monkey.jungle','android/AndroidManifest.xml','android/build.gradle','android/settings.gradle','android/gradle.properties','android/app/build.gradle','README.md'):
         p=ROOT/file
         if p.is_file():z.write(p,file)
-summary={'commit':os.environ.get('GITHUB_SHA'),'errors':errors,'android_emulator_smoke_passed':(DIST/'android-smoke-PASSED').exists(),'hardware_tested':False,'strava_upload_tested':False,'outputs':[p.name for p in DIST.iterdir() if p.suffix in ('.prg','.apk')]}
+summary={'commit':os.environ.get('GITHUB_SHA'),'errors':errors,'strava_mock_http_tests_passed':mock_passed,'android_emulator_smoke_passed':(DIST/'android-smoke-PASSED').exists(),'hardware_tested':False,'strava_upload_tested':False,'outputs':[p.name for p in DIST.iterdir() if p.suffix in ('.prg','.apk')]}
 (DIST/'BUILD-STATUS.json').write_text(json.dumps(summary,indent=2))
 (DIST/'SHA256SUMS.txt').write_text(''.join(hashlib.sha256(p.read_bytes()).hexdigest()+'  '+p.name+'\n' for p in sorted(DIST.iterdir()) if p.is_file() and p.name!='SHA256SUMS.txt'))
 if errors:print('\n'.join(errors));sys.exit(1)

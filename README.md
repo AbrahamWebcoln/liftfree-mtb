@@ -63,7 +63,7 @@ Record a short test with a marked lift and a real riding climb. After uploading,
 - **verified** means Strava's reported ascent matches the file within 1 metre.
 - **ELEVATION MISMATCH** means Strava did not retain that total. The expected and actual values are shown; do not treat the result as solved.
 - **processing** means Strava has not finished importing it.
-- **uncertain** means a network failure prevented confirming the upload response. Check Strava before retrying to avoid duplicates.
+- **uncertain**, or **uploading** left after an app interruption, means the upload may already exist. When an upload/activity ID was saved, LiftFree resumes checking that ID. Without a confirmed ID, LiftFree blocks further submissions of that recording, including manual retries. Check Strava first; only if the activity is absent, export the corrected FIT and upload it manually in Strava. The file's stable `external_id` alone is not treated as an idempotency guarantee.
 
 Do not use Strava's Correct Elevation feature for this test: it requests a different map-based calculation. Verification checks the uploaded number, not whether every lift was classified correctly. Review the lift count and use the manual override when needed.
 
@@ -75,7 +75,11 @@ If the buffer overflows, the watch shows **BACKUP ONLY** and refuses to upload a
 
 ## Build and testing
 
-GitHub Actions compiles both watch targets with Garmin's compiler, runs the Monkey C unit tests in Garmin's simulator, runs the Java ascent/FIT tests, independently decodes the synthetic FIT using Garmin's official Python SDK, builds the Android APK and checks its signature. Logs and SHA-256 checksums accompany the artifacts.
+GitHub Actions runs mocked Strava HTTP regression tests, compiles both watch targets with Garmin's compiler, runs the Monkey C unit tests in Garmin's simulator, runs the Java ascent/FIT tests, independently decodes the synthetic FIT using Garmin's official Python SDK, builds the Android APK and checks its signature. Relevant pull requests and pushes to main run this validation. Logs and SHA-256 checksums accompany the artifacts.
+
+Run `python3 ci/strava_tests.py` for the standalone Strava regression suite (Java 17 and Python; no Android SDK required). It downloads checksum-pinned test dependencies, then runs the production HTTP client against a loopback mock server with synthetic credentials and recordings. Tests cover OAuth callbacks/scopes, token expiration and rotation, exact multipart FIT bytes, asynchronous processing, elevation verification/mismatch, API failures, interrupted persistence, and prevention of duplicate submissions. See [tests/STRAVA.md](tests/STRAVA.md) for coverage and limits.
+
+`BUILD-STATUS.json` reports `strava_mock_http_tests_passed` separately from `strava_upload_tested`. Mock tests do **not** establish Strava's acceptance or elevation handling for real rides. `strava_upload_tested` and `hardware_tested` remain false until an actual watch/phone/Strava test is performed. No Strava credentials or real uploads are used by CI.
 
 The current builds use test signing keys. Future builds may require reinstalling rather than updating the phone APK in place. Export saved rides before uninstalling. No signing keys are included in this repository or download package.
 

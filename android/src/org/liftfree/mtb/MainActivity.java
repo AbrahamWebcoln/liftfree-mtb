@@ -88,10 +88,11 @@ public final class MainActivity extends Activity {
         EditText secret=new EditText(this);secret.setHint("Client secret");secret.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_VARIATION_PASSWORD);secret.setImportantForAutofill(View.IMPORTANT_FOR_AUTOFILL_NO);form.addView(secret);
         try{String old=api.secrets.get("config");if(!old.isEmpty())id.setText(new JSONObject(old).getString("client"));}catch(Exception ignored){}
         new AlertDialog.Builder(this).setTitle("Personal Strava client").setView(form).setNegativeButton("Cancel",null).setPositiveButton("Save and authorize",(d,w)->{
-            try{api.config(id.getText().toString().trim(),secret.getText().toString().trim());authorize();}catch(Exception e){alert("Client settings",e.getMessage());}
+            String client=id.getText().toString().trim(),clientSecret=secret.getText().toString().trim();
+            worker.execute(()->{try{api.config(client,clientSecret);authorize();}catch(Exception e){handler.post(()->alert("Client settings",e.getMessage()));}});
         }).show();
     }
-    void authorize(){try{startActivity(new Intent(Intent.ACTION_VIEW,api.authorization()));}catch(Exception e){alert("Strava authorization",e.getMessage());}}
+    void authorize(){worker.execute(()->{try{Uri target=api.authorization();handler.post(()->{try{startActivity(new Intent(Intent.ACTION_VIEW,target));}catch(Exception e){alert("Strava authorization",e.getMessage());}});}catch(Exception e){handler.post(()->alert("Strava authorization",e.getMessage()));}});}
     @Override protected void onNewIntent(Intent intent){super.onNewIntent(intent);setIntent(intent);handleCallback(intent);}
     void handleCallback(Intent intent){
         Uri uri=intent==null?null:intent.getData();if(uri==null||!"liftfreemtb".equals(uri.getScheme()))return;
@@ -108,16 +109,16 @@ public final class MainActivity extends Activity {
             String id=j.optString("id"),state=j.optString("status");long expected=j.optLong("expected_ascent");
             text(rides,new java.text.SimpleDateFormat("MMM d, yyyy h:mm a",Locale.getDefault()).format(new Date(Long.parseLong(id)*1000)),18);
             text(rides,"Riding ascent: "+expected+" m / "+Math.round(expected*3.28084)+" ft\nLift trips: "+j.optInt("lift_trips")+" · Samples: "+j.optInt("samples")+"\nStatus: "+state+(j.has("strava_ascent")?"\nStrava ascent: "+j.optDouble("strava_ascent")+" m":"")+(j.optString("error").isEmpty()?"":"\n"+j.optString("error")),15);
-            button(rides,j.optLong("activity_id")>0?"Recheck Strava elevation":"Upload / check upload",v->upload(id,state));
+            button(rides,j.optLong("activity_id")>0?"Recheck Strava elevation":"Upload / check upload",v->upload(id,state,j.optLong("upload_id")>0||j.optLong("activity_id")>0));
             button(rides,"Export corrected FIT",v->export(id));
             if(j.optLong("activity_id")>0){long aid=j.optLong("activity_id");button(rides,"Open activity in Strava",v->startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse("https://www.strava.com/activities/"+aid))));}
         }
     }
-    void upload(String id,String state){
+    void upload(String id,String state,boolean knownId){
         if(!api.authorized()){account();return;}
         if(!prefs.getBoolean("backup_sync_ack",false)){alert("Avoid duplicate recordings","Turn off Garmin → Strava auto-sync and confirm it above before uploading the corrected ride.");return;}
-        String message="Upload this corrected activity to your Strava account? Your default Strava privacy applies.";
-        if(state.equals("uncertain")||state.equals("uploading"))message="The previous upload result is uncertain. Check Strava for an existing activity before retrying. Retry now?";
+        if(!knownId&&(state.equals("uncertain")||state.equals("uploading"))){alert("Check Strava first","The previous upload may already exist. LiftFree will not submit this recording again. Check Strava for the activity. If you confirm it is absent, export the corrected FIT and upload it manually in Strava.");return;}
+        String message=knownId?"Check this recording's existing Strava upload and elevation?":"Upload this corrected activity to your Strava account? Your default Strava privacy applies.";
         new AlertDialog.Builder(this).setTitle("Strava upload").setMessage(message).setNegativeButton("Cancel",null).setPositiveButton("Continue",(d,w)->startBridge(new Intent(this,BridgeService.class).setAction("UPLOAD").putExtra("id",id))).show();
     }
     void export(String id){exportId=id;Intent out=new Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("application/octet-stream").putExtra(Intent.EXTRA_TITLE,"LiftFree-"+id+".fit");startActivityForResult(out,200);}
